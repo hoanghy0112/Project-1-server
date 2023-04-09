@@ -296,11 +296,11 @@ class PostProcessHOI(nn.Module):
                 ob.to("cpu").numpy(),
             ):
                 data = {
-                    "score": a,
-                    "label": b,
+                    "score": a.item(),
+                    "label": b.item(),
                     "verb": verb_classes[np.ndarray.argmax(c).item()],
-                    "hbox": d,
-                    "obox": e,
+                    "hbox": d.tolist(),
+                    "obox": e.tolist(),
                 }
                 output.append(data)
 
@@ -496,6 +496,12 @@ def get_args_parser():
     parser.add_argument(
         "--dist_url", default="env://", help="url used to set up distributed training"
     )
+    parser.add_argument(
+        "--host", help="url used to set up distributed training"
+    )
+    parser.add_argument(
+        "app:app", help="url used to set up distributed training"
+    )
     return parser
 
 
@@ -548,11 +554,13 @@ def run(model, postprocessor, imagePath="download.png"):
     final.sort(key=lambda v: v["score"], reverse=True)
     return final
 
+model, postprocessor = load_model()
+print('Finish load model')
 
 if __name__ == "__main__":
     imagePath = "download.jpg"
 
-    model, postprocessor = load_model()
+    # model, postprocessor = load_model()
 
     result = run(model, postprocessor, imagePath)
 
@@ -567,8 +575,8 @@ if __name__ == "__main__":
 
         draw.rectangle(hbox, width=2, outline="green")
         draw.rectangle(obox, width=2, outline="red")
-        draw.text([hbox[0].item(), hbox[1].item()], fill="green", text=verb)
-        draw.text([obox[0].item(), obox[1].item()], fill="red", text=label)
+        draw.text([hbox[0], hbox[1]], fill="green", text=verb)
+        draw.text([obox[0], obox[1]], fill="red", text=label)
 
     imageFileExtension = imagePath.split(".")[-1]
     image.save(f"output.{imageFileExtension}")
