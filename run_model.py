@@ -217,8 +217,8 @@ verb_classes = [
 ]
 
 
-def getImage():
-    image = Image.open("download.png").convert("RGB")
+def getImage(imagePath="download.png"):
+    image = Image.open(imagePath).convert("RGB")
     target = {}
     w, h = image.size
     target["orig_size"] = torch.as_tensor([int(h), int(w)])
@@ -305,47 +305,6 @@ class PostProcessHOI(nn.Module):
                 output.append(data)
 
             results.append(output)
-
-            # sl = torch.full_like(ol, self.subject_category_id)
-            # l = torch.cat((ol, sl))
-            # b = torch.cat((ob, sb))
-
-            # bboxes = [
-            #     {"bbox": bbox, "category_id": label}
-            #     for bbox, label in zip(ob.to("cpu").numpy(), l.to("cpu").numpy())
-            # ]
-
-            # hoi_scores = vs * os.unsqueeze(1)
-
-            # verb_labels = (
-            #     torch.arange(hoi_scores.shape[1], device="cpu")
-            #     .view(1, -1)
-            #     .expand(hoi_scores.shape[0], -1)
-            # )
-            # object_labels = ol.view(-1, 1).expand(-1, hoi_scores.shape[1])
-            # # masks = self.correct_mat[
-            # #     verb_labels.reshape(-1), object_labels.reshape(-1)
-            # # ].view(hoi_scores.shape)
-            # # hoi_scores *= masks
-
-            # ids = torch.arange(b.shape[0])
-
-            # hois = [
-            #     {
-            #         "subject_id": subject_id,
-            #         "object_id": object_id,
-            #         "category_id": category_id,
-            #         "score": score,
-            #     }
-            #     for subject_id, object_id, category_id, score in zip(
-            #         ids[: ids.shape[0] // 2].to("cpu").numpy(),
-            #         ids[ids.shape[0] // 2 :].to("cpu").numpy(),
-            #         verb_labels.to("cpu").numpy(),
-            #         hoi_scores.to("cpu").numpy(),
-            #     )
-            # ]
-
-            # results.append({"predictions": bboxes, "hoi_prediction": hois})
 
         return results
 
@@ -591,14 +550,14 @@ def generate(results, targets, missing_category_id=80):
     return detections
 
 
-if __name__ == "__main__":
+def run(imagePath="download.png"):
     parser = argparse.ArgumentParser(
         "DETR training and evaluation script", parents=[get_args_parser()]
     )
     args = parser.parse_args()
 
     device = torch.device("cpu")
-    image, target = getImage()
+    image, target = getImage(imagePath)
     targets = [{k: (v.to(device) if k != "id" else v) for k, v in target.items()}]
 
     model = getModel(args)
@@ -615,70 +574,47 @@ if __name__ == "__main__":
     results = postprocessor(model_result, orig_target_sizes)
     result = results[0]
 
-    # labels = result["labels"]
-    # boxes = result["boxes"]
-    # verb_scores = result["verb_scores"]
-    # sub_ids = result["sub_ids"]
-    # obj_ids = result["obj_ids"]
-    # predictions = result["predictions"]
-    # hoi_prediction = result["hoi_prediction"]
+    final = []
 
-    print(
-        # labels.shape,
-        # boxes.shape,
-        # verb_scores.shape,
-        # sub_ids.shape,
-        # obj_ids.shape,
-        # hoi_prediction,
-        # predictions,
-        # hoi_prediction,
-        # result,
-        # len(result),
-        sep="\n",
-    )
-
-    image = Image.open("download.png")
-    draw = ImageDraw.Draw(image)
-
-    # final = []
-
-    # for hoi in hoi_prediction:
-    #     scores = hoi["score"]
-    #     subject_id = hoi["subject_id"].tolist()
-    #     object_id = hoi["object_id"].tolist()
-
-    #     # max_index = torch.argmax(scores).item()
-    #     max_index = np.ndarray.argmax(scores).item()
-
-    #     category_id = hoi["category_id"][max_index].item()
-    #     sbox = predictions[subject_id]["bbox"].tolist()
-    #     obox = predictions[object_id - 100]["bbox"].tolist()
-    #     vbox = predictions[max_index]["bbox"].tolist()
-
-    #     # print(subject_id, object_id, verb_classes[category_id], "", sep="\n")
-
-    #     # draw.rectangle(vbox, width=2, outline="red")
-    #     data = {
-    #         "sbox": sbox,
-    #         "obox": obox,
-    #         "vbox": vbox,
-    #         "verb": verb_classes[category_id],
-    #         "score": scores[max_index].item(),
-    #     }
-    #     final.append(data)
-
-    result.sort(key=lambda v: v["score"], reverse=True)
-
-    for i in range(10):
-        data = result[i]
-        hbox = data["hbox"]
-        obox = data["obox"]
-        label = data["label"]
+    for data in result:
+        # hbox = data["hbox"]
+        # obox = data["obox"]
+        # label = data["label"]
         verb = data["verb"]
         score = data["score"]
 
-        draw.rectangle(hbox, width=2, outline="green")
-        draw.rectangle(obox, width=2, outline="blue")
-        print(verb, label, score, sep="\n")
+        index = -1
+        for j, d in enumerate(final):
+            if d["verb"] == verb:
+                if d["score"] < score:
+                    final[j] = data
+                index = j
+                break
 
-    image.save("output.png")
+        if index == -1:
+            final.append(data)
+
+    final.sort(key=lambda v: v["score"], reverse=True)
+    return final
+
+
+if __name__ == "__main__":
+    imagePath = "download.jpg"
+    result = run(imagePath)
+
+    image = Image.open(imagePath)
+    draw = ImageDraw.Draw(image)
+
+    for data in result:
+        hbox = data["hbox"]
+        obox = data["obox"]
+        label = labels[data["label"]]["name"]
+        verb = data["verb"]
+
+        draw.rectangle(hbox, width=2, outline="green")
+        draw.rectangle(obox, width=2, outline="red")
+        draw.text([hbox[0].item(), hbox[1].item()], fill="green", text=verb)
+        draw.text([obox[0].item(), obox[1].item()], fill="red", text=label)
+
+    imageFileExtension = imagePath.split(".")[-1]
+    image.save(f"output.{imageFileExtension}")
