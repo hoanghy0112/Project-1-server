@@ -3,3 +3,5 @@ data/**
 params/**
 logs/**
 !.gitkeep
+
+*.pth

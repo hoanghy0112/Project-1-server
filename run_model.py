@@ -499,66 +499,11 @@ def get_args_parser():
     return parser
 
 
-def generate(results, targets, missing_category_id=80):
-    detections = []
-
-    for img_results, img_targets in zip(results, targets):
-        for hoi in img_results["hoi_prediction"]:
-            detection = {
-                "person_box": img_results["predictions"][hoi["subject_id"]][
-                    "bbox"
-                ].tolist(),
-            }
-            if (
-                img_results["predictions"][hoi["object_id"]]["category_id"]
-                == missing_category_id
-            ):
-                object_box = [np.nan, np.nan, np.nan, np.nan]
-            else:
-                object_box = img_results["predictions"][hoi["object_id"]][
-                    "bbox"
-                ].tolist()
-            cut_agent = 0
-            hit_agent = 0
-            eat_agent = 0
-            for idx, score in zip(hoi["category_id"], hoi["score"]):
-                verb_class = verb_classes[idx]
-                score = score.item()
-                if len(verb_class.split("_")) == 1:
-                    detection["{}_agent".format(verb_class)] = score
-                elif "cut_" in verb_class:
-                    detection[verb_class] = object_box + [score]
-                    cut_agent = score if score > cut_agent else cut_agent
-                elif "hit_" in verb_class:
-                    detection[verb_class] = object_box + [score]
-                    hit_agent = score if score > hit_agent else hit_agent
-                elif "eat_" in verb_class:
-                    detection[verb_class] = object_box + [score]
-                    eat_agent = score if score > eat_agent else eat_agent
-                else:
-                    detection[verb_class] = object_box + [score]
-                    detection[
-                        "{}_agent".format(
-                            verb_class.replace("_obj", "").replace("_instr", "")
-                        )
-                    ] = score
-            detection["cut_agent"] = cut_agent
-            detection["hit_agent"] = hit_agent
-            detection["eat_agent"] = eat_agent
-            detections.append(detection)
-
-    return detections
-
-
-def run(imagePath="download.png"):
+def load_model():
     parser = argparse.ArgumentParser(
         "DETR training and evaluation script", parents=[get_args_parser()]
     )
     args = parser.parse_args()
-
-    device = torch.device("cpu")
-    image, target = getImage(imagePath)
-    targets = [{k: (v.to(device) if k != "id" else v) for k, v in target.items()}]
 
     model = getModel(args)
     model.load_state_dict(
@@ -567,19 +512,25 @@ def run(imagePath="download.png"):
             map_location=torch.device("cpu"),
         )["model"]
     )
-    model_result = model([image])
 
-    postprocessor = PostProcessHOI(args.subject_category_id)
+    postprocessor = PostProcessHOI(0)
+
+    return model, postprocessor
+
+
+def run(model, postprocessor, imagePath="download.png"):
+    image, target = getImage(imagePath)
+    targets = [{k: (v.to("cpu") if k != "id" else v) for k, v in target.items()}]
+
+    model_result = model([image])
     orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
+
     results = postprocessor(model_result, orig_target_sizes)
     result = results[0]
 
     final = []
 
     for data in result:
-        # hbox = data["hbox"]
-        # obox = data["obox"]
-        # label = data["label"]
         verb = data["verb"]
         score = data["score"]
 
@@ -600,7 +551,10 @@ def run(imagePath="download.png"):
 
 if __name__ == "__main__":
     imagePath = "download.jpg"
-    result = run(imagePath)
+
+    model, postprocessor = load_model()
+
+    result = run(model, postprocessor, imagePath)
 
     image = Image.open(imagePath)
     draw = ImageDraw.Draw(image)
