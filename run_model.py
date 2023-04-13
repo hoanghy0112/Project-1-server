@@ -496,12 +496,9 @@ def get_args_parser():
     parser.add_argument(
         "--dist_url", default="env://", help="url used to set up distributed training"
     )
-    parser.add_argument(
-        "--host", help="url used to set up distributed training"
-    )
-    parser.add_argument(
-        "app:app", help="url used to set up distributed training"
-    )
+    parser.add_argument("--host", help="url used to set up distributed training")
+    parser.add_argument("-p", help="url used to set up distributed training")
+    parser.add_argument("app:app", help="url used to set up distributed training")
     return parser
 
 
@@ -514,7 +511,7 @@ def load_model():
     model = getModel(args)
     model.load_state_dict(
         torch.load(
-            "logs/qpic_resnet50_hico.pth",
+            "pth_model/qpic_resnet50_hico.pth",
             map_location=torch.device("cpu"),
         )["model"]
     )
@@ -537,25 +534,30 @@ def run(model, postprocessor, imagePath="download.png"):
     final = []
 
     for data in result:
-        verb = data["verb"]
-        score = data["score"]
+        # verb = data["verb"]
+        # score = data["score"]
 
-        index = -1
-        for j, d in enumerate(final):
-            if d["verb"] == verb:
-                if d["score"] < score:
-                    final[j] = data
-                index = j
-                break
+        # index = -1
+        # for j, d in enumerate(final):
+        #     if d["verb"] == verb:
+        #         if d["score"] < score:
+        #             final[j] = data
+        #         index = j
+        #         continue
 
-        if index == -1:
+        # if index == -1:
+        if data['score'] > 0.01:
+            labelId = data["label"]
+            data["label"] = labels[labelId]["name"]
+            # print(data)
             final.append(data)
 
     final.sort(key=lambda v: v["score"], reverse=True)
     return final
 
+
 model, postprocessor = load_model()
-print('Finish load model')
+print("Finish load model")
 
 if __name__ == "__main__":
     imagePath = "download.jpg"
