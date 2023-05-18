@@ -1,6 +1,6 @@
 from flask import request, Flask
 
-# from run_model import run, model, postprocessor
+from run_model import run, model, postprocessor
 
 app = Flask(__name__)
 
@@ -16,6 +16,5 @@ def predict():
     ext = image.filename.split(".")[-1]
     filename = f"download_temp.{ext}"
     image.save(filename)
-    # result = run(model, postprocessor, filename)
-    # return result
-    return image
+    result = run(model, postprocessor, filename)
+    return result
